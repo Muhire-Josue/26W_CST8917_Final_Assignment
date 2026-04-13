@@ -1,0 +1,28 @@
+### 1. Valid expense under $100 -> Auto-approved
+POST http://localhost:7071/api/expenses/start
+Content-Type: application/json
+
+{
+  "employee_name": "Josue Muhire",
+  "employee_email": "josue@example.com",
+  "amount": 75,
+  "category": "travel",
+  "description": "Taxi from airport to client site",
+  "manager_email": "manager@example.com"
+}
+
+### 2. Valid expense >= $100 -> Manager approves
+POST http://localhost:7071/api/expenses/start
+Content-Type: application/json
+
+{
+  "employee_name": "Josue Muhire",
+  "employee_email": "josue@example.com",
+  "amount": 250,
+  "category": "software",
+  "description": "Annual software subscription",
+  "manager_email": "manager@example.com"
+}
+
+### Check approved expense status
+GET http://localhost:7071/api/expenses/status/e2d7d3e5c91f41e5bc1b22f4b852c228
