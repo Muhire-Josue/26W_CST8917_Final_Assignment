@@ -24,5 +24,78 @@ Content-Type: application/json
   "manager_email": "manager@example.com"
 }
 
-### Check approved expense status
-GET http://localhost:7071/api/expenses/status/e2d7d3e5c91f41e5bc1b22f4b852c228
+### 2b. Approve pending expense
+POST http://localhost:7071/api/expenses/approve/fab80b9d0dce4de9997b93b9e508b19e
+
+### 2c. Check approved expense status
+GET http://localhost:7071/api/expenses/status/fab80b9d0dce4de9997b93b9e508b19e
+
+
+### 3. Valid expense >= $100 -> Manager rejects
+POST http://localhost:7071/api/expenses/start
+Content-Type: application/json
+
+{
+  "employee_name": "Josue Muhire",
+  "employee_email": "josue@example.com",
+  "amount": 300,
+  "category": "equipment",
+  "description": "External monitor purchase",
+  "manager_email": "manager@example.com"
+}
+
+### 3b. Reject pending expense
+POST http://localhost:7071/api/expenses/reject/f2cdc84261bd485fb27b11f44c60bd55
+
+### 3c. Check rejected expense status
+GET http://localhost:7071/api/expenses/status/f2cdc84261bd485fb27b11f44c60bd55
+
+
+### 4. Valid expense >= $100 -> No manager response
+POST http://localhost:7071/api/expenses/start
+Content-Type: application/json
+
+{
+  "employee_name": "Josue Muhire",
+  "employee_email": "josue@example.com",
+  "amount": 180,
+  "category": "meals",
+  "description": "Team dinner with client",
+  "manager_email": "manager@example.com"
+}
+
+### 4b. Check escalated expense status
+GET http://localhost:7071/api/expenses/status/791f781f8c0d45f5bc8eee58977c05f4
+
+
+### 5. Missing required fields
+POST http://localhost:7071/api/expenses/start
+Content-Type: application/json
+
+{
+  "employee_name": "Josue Muhire",
+  "employee_email": "josue@example.com",
+  "amount": 90,
+  "category": "travel",
+  "description": "Taxi to airport"
+}
+
+### 5b. Check missing fields status
+GET http://localhost:7071/api/expenses/status/97e376ccf8c840eb88f80ed08aca3c90
+
+
+### 6. Invalid category
+POST http://localhost:7071/api/expenses/start
+Content-Type: application/json
+
+{
+  "employee_name": "Josue Muhire",
+  "employee_email": "josue@example.com",
+  "amount": 120,
+  "category": "gaming",
+  "description": "Game subscription reimbursement",
+  "manager_email": "manager@example.com"
+}
+
+### 6b. Check invalid category status
+GET http://localhost:7071/api/expenses/status/e7ca35b48a684b928460a899683d0f71

@@ -11,6 +11,50 @@ VALID_CATEGORIES = {"travel", "meals", "supplies", "equipment", "software", "oth
 
 
 # ----------------------------
+# Helpers
+# ----------------------------
+def normalize_manager_approval(raw_approval):
+    """
+    Accepts approval data in any of these forms:
+    - {"decision": "approved", "responded_by": "manager"}
+    - '{"decision":"approved","responded_by":"manager"}'
+    - "approved"
+    - "rejected"
+    Returns a normalized dict.
+    """
+    if isinstance(raw_approval, dict):
+        return raw_approval
+
+    if isinstance(raw_approval, str):
+        raw_text = raw_approval.strip()
+
+        # Try JSON first
+        try:
+            parsed = json.loads(raw_text)
+            if isinstance(parsed, dict):
+                return parsed
+            if isinstance(parsed, str):
+                return {
+                    "decision": parsed.lower(),
+                    "responded_by": "manager",
+                }
+        except json.JSONDecodeError:
+            pass
+
+        # Fallback: treat plain string as decision
+        return {
+            "decision": raw_text.lower(),
+            "responded_by": "manager",
+        }
+
+    return {
+        "decision": "",
+        "responded_by": "unknown",
+        "raw_value": str(raw_approval),
+    }
+
+
+# ----------------------------
 # Orchestrator
 # ----------------------------
 @app.orchestration_trigger(context_name="context")
@@ -41,14 +85,16 @@ def expense_approval_orchestrator(context: df.DurableOrchestrationContext):
         return final_result
 
     approval_event = "ManagerApproval"
-    timeout_at = context.current_utc_datetime + timedelta(minutes=1)
+    timeout_at = context.current_utc_datetime + timedelta(minutes=3)
     timeout_task = context.create_timer(timeout_at)
     approval_task = context.wait_for_external_event(approval_event)
 
     winner = yield context.task_any([approval_task, timeout_task])
 
     if winner == approval_task:
-        approval_result = approval_task.result
+        raw_approval_result = approval_task.result
+        approval_result = normalize_manager_approval(raw_approval_result)
+
         if not timeout_task.is_completed:
             timeout_task.cancel()
 
