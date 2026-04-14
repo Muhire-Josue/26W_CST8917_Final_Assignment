@@ -1,0 +1,12 @@
+### Validate valid expense
+POST http://localhost:7071/api/validate-expense
+Content-Type: application/json
+
+{
+  "employee_name": "Josue Muhire",
+  "employee_email": "josue@example.com",
+  "amount": 120,
+  "category": "software",
+  "description": "Annual software subscription",
+  "manager_email": "manager@example.com"
+}
