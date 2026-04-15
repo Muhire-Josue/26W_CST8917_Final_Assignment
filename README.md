@@ -1,145 +1,339 @@
 # Final Project: Compare & Contrast — Dual Implementation of an Expense Approval Workflow
 
-## CST8917 - Serverless Applications | Winter 2026
+**Name:** Muhire Rutayisire  
+
+**Student Number:** 041193051
+
+**Project Title:** Expense Approval Workflow on Azure: Durable Functions vs Logic Apps + Service Bus 
+
+**Date:** April 14th, 2026  
 
 ---
 
-## Overview
+## Project Overview
 
-Implement the **same business workflow** using two different Azure serverless orchestration approaches, then present a critical comparison of your experience.
+This project implements the same expense approval business workflow using two different Azure serverless orchestration approaches:
 
-You will build an **expense approval pipeline** twice:
-- **Version A:** Using **Azure Durable Functions** (code-first orchestration)
-- **Version B:** Using **Azure Logic Apps + Service Bus** (visual/declarative orchestration)
+- **Version A:** Azure Durable Functions (Python v2, code-first orchestration)
+- **Version B:** Azure Logic Apps + Azure Service Bus + Azure Functions (visual/declarative orchestration)
 
-|               |                                                                     |
-| ------------- | ------------------------------------------------------------------- |
-| **Weight**    | 10% of final grade                                                  |
-| **Due Date**  | See Brightspace for exact deadline                                  |
-| **Type**      | Individual                                                          |
-| **AI Policy** | AI tools are permitted with mandatory disclosure (see Deliverables) |
+The goal of the project was not only to make both versions work, but also to compare the two approaches based on actual implementation experience, debugging effort, testing, observability, and suitability for production use.
 
----
+The workflow processes an expense request with the following fields:
 
-## Learning Objectives
+- employee name
+- employee email
+- amount
+- category
+- description
+- manager email
 
-- Implement the same workflow using two different serverless orchestration approaches
-- Compare code-first and visual/declarative orchestration from direct experience
-- Evaluate trade-offs in development experience, testability, error handling, and cost
-- Present and defend technical decisions to an audience
+The business rules implemented are:
 
----
+- Requests missing required fields are rejected
+- Requests with invalid categories are rejected
+- Expenses under \$100 are auto-approved
+- Expenses of \$100 or more require additional workflow handling
+- If no manager decision is received within the defined logic, the request is treated as escalated
+- The employee receives an email with the final result
 
-## The Workflow: Expense Approval Pipeline
+Valid categories used in both versions:
 
-Both versions must implement the following business rules:
-
-| Rule                 | Description                                                                                                                                                 |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Input**            | An expense request with: employee name, employee email, amount, category, description, and manager email                                                    |
-| **Validation**       | Reject requests missing any required field or using an invalid category. Valid categories: `travel`, `meals`, `supplies`, `equipment`, `software`, `other`. |
-| **Auto-Approve**     | Expenses under $100 are automatically approved — no manager needed.                                                                                         |
-| **Manager Approval** | Expenses of $100 or more require manager approval. The system waits for a manager decision.                                                                 |
-| **Timeout**          | If no manager decision arrives within the timeout period, the expense is auto-approved and flagged as "escalated".                                          |
-| **Notification**     | The employee receives an email with the final outcome (approved, rejected, or escalated).                                                                   |
-
-You decide the architecture, components, and how each Azure service fits together. Refer to what you learned in Labs 1-4 and Weeks 1-12 lectures.
+- `travel`
+- `meals`
+- `supplies`
+- `equipment`
+- `software`
+- `other`
 
 ---
 
-## Part 1: Version A — Durable Functions
+## Version A Summary — Durable Functions
 
-Implement the expense approval workflow using **Azure Durable Functions** (Python v2 programming model).
+### Overview
 
-Your implementation must demonstrate:
-- Orchestrator, activity, and client functions
-- The **Human Interaction pattern** with a durable timer for timeout
-- Activity chaining for validation, processing, and notification
-- An HTTP endpoint that simulates a manager approving or rejecting
+Version A was implemented using **Azure Durable Functions** with the **Python v2 programming model**. This version followed a code-first orchestration style where the workflow was defined explicitly in Python through orchestrator and activity functions.
 
-Create a `test-durable.http` file covering these scenarios:
+The Durable Functions implementation was designed to demonstrate:
 
-| #   | Scenario                                   | Expected Outcome |
-| --- | ------------------------------------------ | ---------------- |
-| 1   | Valid expense under $100                   | Auto-approved    |
-| 2   | Valid expense >= $100, manager approves    | Approved         |
-| 3   | Valid expense >= $100, manager rejects     | Rejected         |
-| 4   | Valid expense >= $100, no manager response | Escalated        |
-| 5   | Missing required fields                    | Validation error |
-| 6   | Invalid category                           | Validation error |
+- orchestrator, activity, and client functions
+- activity chaining
+- a human interaction style workflow
+- a durable timer for timeout handling
+- an HTTP endpoint used to simulate manager approval or rejection
 
----
+### Design Decisions
 
-## Part 2: Version B — Logic Apps + Service Bus
+The Durable Functions version was structured around one main orchestrator that coordinated the workflow from start to finish. The general flow was:
 
-Implement the **same workflow** using **Azure Logic Apps** and **Azure Service Bus**.
+1. Receive expense request
+2. Validate the request using an activity function
+3. If invalid, return a validation error result
+4. If valid and amount is under \$100, auto-approve
+5. If amount is \$100 or more, wait for a manager response
+6. Use a durable timer to enforce timeout behavior
+7. If the manager responds before timeout, finalize based on approval or rejection
+8. If no response arrives before timeout, mark the request as escalated
+9. Send a final notification to the employee
 
-Your implementation must include:
-- A Service Bus queue for incoming expense requests
-- A Logic App that orchestrates the workflow
-- An Azure Function for validation (called by the Logic App)
-- A Service Bus topic with filtered subscriptions for outcomes (approved, rejected, escalated)
-- Email notifications to the employee
+I chose this structure because Durable Functions naturally matches long-running workflows that involve waiting, branching, and timeout logic. The human interaction pattern was a good fit for the manager approval requirement because the orchestrator can pause safely and resume when an external event arrives.
 
-How you handle the manager approval step in Logic Apps is up to you. Logic Apps does not natively support the Human Interaction pattern the way Durable Functions does — figure out a reasonable approach and document your choice.
+### Challenges
 
-Test the same scenarios as Version A. Capture screenshots of Logic App run history, condition branches, emails received, and topic subscription counts.
+The main challenge with Version A was that even though the workflow model was very expressive, it required more careful implementation and debugging inside code. The orchestration logic had to be written correctly, and small mistakes in event names, timer behavior, or activity outputs could break the workflow. However, once the structure was correct, the behavior was predictable and easier to reason about from a developer perspective.
 
----
+Another challenge was keeping local testing aligned with deployed behavior. Since orchestration state and timing behavior are part of Durable Functions, testing required more discipline than testing a simple HTTP-triggered function.
 
-## Part 3: Comparison Analysis
+### Test Coverage
 
-Write a structured comparison (800-1200 words) covering **all six** of these dimensions:
+A `test-durable.http` file was used to cover the required scenarios:
 
-| Dimension                     | Question to Answer                                                                                                                                                           |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Development Experience**    | Which was faster to build? Easier to debug? Which gave you more confidence the logic was correct?                                                                            |
-| **Testability**               | Which was easier to test locally? Could you write automated tests for either?                                                                                                |
-| **Error Handling**            | How does each handle failures? Which gives more control over retries and recovery?                                                                                           |
-| **Human Interaction Pattern** | How did each handle "wait for manager approval"? Which was more natural?                                                                                                     |
-| **Observability**             | Which made it easier to monitor runs and diagnose problems?                                                                                                                  |
-| **Cost**                      | Estimate cost at ~100 expenses/day and ~10,000 expenses/day. Use the [Azure Pricing Calculator](https://azure.microsoft.com/pricing/calculator/) and state your assumptions. |
-
-End with a **recommendation (200-300 words)**: If a team asked you to build this for production, which approach would you choose and why? When would you choose the other instead?
-
-Be specific. "Durable Functions was easier to test" is weak. Describe *what you actually experienced* and *why* it mattered.
+1. Valid expense under \$100 → auto-approved
+2. Valid expense \$100 or more, manager approves → approved
+3. Valid expense \$100 or more, manager rejects → rejected
+4. Valid expense \$100 or more, no manager response → escalated
+5. Missing required fields → validation error
+6. Invalid category → validation error
 
 ---
 
-## Part 4: Presentation
+## Version B Summary — Logic Apps + Service Bus
 
-Prepare and record a **video presentation** with a **slide deck** explaining your project.
+### Overview
 
-### Slide Deck
+Version B was implemented using:
 
-Create a PowerPoint (or equivalent) presentation covering:
+- **Azure Logic Apps**
+- **Azure Service Bus**
+- **Azure Function** for validation
+- **Email notifications** through the Outlook connector
 
-1. **Introduction** — The workflow and business rules
-2. **Version A** — Architecture, key design decisions, demo of it working
-3. **Version B** — Architecture, key design decisions, demo of it working
-4. **Comparison** — Summary of your findings across the six dimensions (use visuals — tables, charts, or side-by-side comparisons)
-5. **Recommendation** — Your verdict and reasoning
-6. **Lessons Learned** — What surprised you? What would you do differently?
+This version used a more visual, declarative style. The Logic App orchestrated the workflow, Service Bus handled messaging, and the Azure Function was used as a reusable validation component.
 
-### Video Requirements
+### Implemented Architecture
 
-| Requirement   | Details                                                                                     |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| **Duration**  | 10-15 minutes                                                                               |
-| **Format**    | Screen recording with voice narration over your slide deck                                  |
-| **Live Demo** | Include a live demo of both versions working (can be embedded in slides or shown alongside) |
-| **Platform**  | YouTube (unlisted is fine)                                                                  |
+The following Azure resources were used:
 
-You are presenting to a technical audience. Explain your decisions, not just what you built.
+- **Service Bus Queue** for incoming expense requests
+- **Logic App** to orchestrate the workflow
+- **Azure Function** to validate the incoming request
+- **Service Bus Topic** for outcomes
+- **Filtered subscriptions / routing logic** for outcome-based handling
+- **Outlook email connector** to notify the employee
+
+### Actual Workflow Used
+
+The implemented Logic App flow was:
+
+1. Trigger when one or more messages arrive in the `expense-requests` queue
+2. Decode the Service Bus message body
+3. Send the decoded JSON to the validation Azure Function through an HTTP action
+4. Parse the function response
+5. Check whether `is_valid` is `true`
+6. If invalid:
+   - send an outcome message with a validation error
+7. If valid:
+   - check whether the amount is less than \$100
+   - if less than \$100:
+     - send an approved outcome message
+     - send approval email to employee
+   - otherwise:
+     - send an escalated outcome message
+     - send escalation email to employee
+
+### Approach Chosen for Manager Approval
+
+Logic Apps does not support the human interaction pattern in the same natural way that Durable Functions does. Because of that, I chose a simpler and reasonable approach for Version B:
+
+- requests under \$100 are automatically approved
+- requests \$100 or more are treated as requiring further handling
+- in the implemented flow, those requests are routed to an **escalated** outcome and the employee is notified accordingly
+
+This choice allowed me to keep the orchestration inside Logic Apps manageable while still demonstrating validation, branching, message-based workflow orchestration, and employee notification. I documented this difference because it reflects an important practical trade-off between the two approaches.
+
+### Validation Function
+
+The Azure Function used by the Logic App performed:
+
+- required field validation
+- category validation
+- request normalization
+- JSON response generation with:
+  - `is_valid`
+  - `message`
+  - `normalized_expense`
+
+This function was also tested locally through `test-expense.http`.
+
+### Challenges
+
+Version B involved more Azure integration issues than Version A. The most time-consuming problems were:
+
+- creating the correct Service Bus connection inside Logic Apps
+- selecting the correct queue name and trigger
+- decoding the Service Bus body correctly
+- passing proper JSON to the validation function
+- fixing condition expressions in Logic Apps
+- converting string values to numbers for amount comparison
+- making sure message properties were set correctly
+- wiring email notifications correctly
+- dealing with run history errors and branch debugging
+
+One specific issue was that the raw Service Bus body was not immediately usable as JSON. I had to explicitly decode and parse it before sending it to the validation function. Another issue was that the amount field had to be converted before numeric comparison in Logic Apps. Email delivery also worked only after the correct branch logic and connector configuration were fixed.
+
+### Evidence Collected
+
+The `screenshots/` folder for Version B contains evidence such as:
+
+- Logic App designer
+- Service Bus queue/topic setup
+- run history
+- successful and failed workflow runs
+- condition branching behavior
+- email received for final outcome
 
 ---
 
-## Deliverables
+## Comparison Analysis
 
-### Repository Structure
+### 1. Development Experience
 
-```
-CST8917-FinalProject-YourName/
+From a development experience perspective, the two versions felt very different.
+
+The **Durable Functions** version felt more natural to me as a developer because the workflow logic lived in code. I could read the sequence in one place, structure it with functions, and reason about how the state moved through the workflow. The logic was explicit. If I wanted to understand what happened after validation, I could inspect the orchestrator code directly. This gave me more confidence that the workflow matched the business rules.
+
+The **Logic Apps** version was faster to start visually because I could assemble the workflow using connectors and built-in actions. For simple orchestration, that is convenient. However, once the workflow became more detailed, debugging became slower. I spent noticeable time fixing wiring issues rather than business logic issues. Examples included connection setup, message decoding, expressions, type conversions, and branch behavior. In other words, the visual designer was fast at the beginning, but not always faster overall when troubleshooting.
+
+So in my experience:
+- **Logic Apps** was quicker for initial assembly
+- **Durable Functions** gave me more control and more confidence in the correctness of the logic
+
+### 2. Testability
+
+**Durable Functions** was easier to think about from a testing perspective. Because the workflow lives in code, it is easier to isolate pieces such as validation and activities. The business logic can be broken down into functions with clearer input/output expectations. Even when the full orchestration is more complex, the individual parts lend themselves better to structured testing.
+
+For **Logic Apps**, local testing was weaker. The validation Azure Function could be tested locally, which helped a lot, but the orchestration itself mostly had to be tested through Azure. That meant each fix often required saving, running, checking run history, and interpreting visual traces. This made iteration slower and less automated.
+
+So overall:
+- **Durable Functions** was stronger for local and code-oriented testing
+- **Logic Apps** depended more on portal-based testing and observation
+
+### 3. Error Handling
+
+Both versions support error handling, but they do so differently.
+
+With **Durable Functions**, the developer has more explicit control. Retry behavior, fallback logic, timer behavior, and event handling can all be defined in code. That gives fine-grained control over recovery strategies. It also means the developer must design those strategies carefully.
+
+With **Logic Apps**, error handling is highly visible in run history. This is a strength. When something failed, I could see exactly which action failed and inspect inputs and outputs. During implementation, this visibility was very useful. However, the error handling model felt more connector-driven and configuration-driven than code-driven. It was easier to inspect but not always easier to shape precisely.
+
+In my experience:
+- **Durable Functions** gives more control over retries and recovery
+- **Logic Apps** gives faster visual diagnosis during debugging
+
+### 4. Human Interaction Pattern
+
+This was the biggest difference between the two approaches.
+
+The **Durable Functions** version was the more natural fit for manager approval. The human interaction pattern and durable timer directly support waiting for an external decision while preserving workflow state. This is exactly the kind of problem Durable Functions is good at solving.
+
+The **Logic Apps** version did not feel as natural for this requirement. It can still be designed in reasonable ways, but it is not as elegant for a wait-for-human-response workflow. Because of that, I chose a simpler approach in Version B and documented the limitation. That itself was an important learning outcome: some workflow engines are technically capable of implementing a process, but one may fit the business problem much better than the other.
+
+For this dimension, **Durable Functions clearly handled the requirement better**.
+
+### 5. Observability
+
+**Logic Apps** was easier to monitor during implementation. The run history, action-by-action visualization, branch status, inputs, outputs, and failure indicators made it simple to trace what happened. When the workflow was failing, this visibility was one of the main reasons I was able to fix it.
+
+**Durable Functions** also provides observability, but the experience is more code and runtime oriented. I had to rely more on logs, orchestration state understanding, and endpoint behavior. It was still manageable, but less immediately visual than Logic Apps.
+
+So in practice:
+- **Logic Apps** was better for visual observability and troubleshooting in Azure Portal
+- **Durable Functions** was more developer-oriented but less immediately transparent to non-developers
+
+### 6. Cost
+
+At lower scale, both approaches are reasonable for this kind of workflow. At approximately **100 expenses per day**, either solution is acceptable from a cost perspective, especially when using serverless consumption-style services and staying within student or low-usage limits.
+
+At larger scale, such as **10,000 expenses per day**, cost depends heavily on:
+- number of Logic App actions
+- number of Service Bus operations
+- function executions
+- email sends
+- orchestration duration
+- retry behavior
+- timer/wait patterns
+
+My estimate is that **Durable Functions** would likely be more cost-efficient when the workflow logic is complex but stable, because the orchestration is code-driven and avoids the per-action expansion that can happen in Logic Apps.
+
+By contrast, **Logic Apps** can become more expensive as workflows grow in complexity because each step, connector call, and action can add cost. The visual convenience is valuable, but at scale it may cost more.
+
+My assumptions for a rough estimate were:
+- one validation function call per request
+- one or more message operations per request
+- one final email per request
+- additional branching actions in Logic Apps
+- a higher-complexity path for expenses requiring escalation
+
+From a production cost-awareness perspective, I would expect:
+- **100 expenses/day** → both acceptable
+- **10,000 expenses/day** → Durable Functions becomes more attractive for efficiency and control
+
+---
+
+## Recommendation
+
+If a team asked me to build this workflow for production, I would choose **Azure Durable Functions**.
+
+The main reason is that the manager approval requirement is fundamentally a long-running, stateful, human-interaction workflow. Durable Functions fits that requirement more naturally. It provides a cleaner model for waiting on external input, handling timeouts, and coordinating state transitions in a way that feels robust and intentional. It is also easier to test logically, easier to structure in code, and easier to evolve when workflow rules become more complex.
+
+I would choose **Logic Apps** instead when the process is highly integration-focused, involves many SaaS or Azure connectors, and the orchestration does not depend heavily on complex code-first workflow behavior. Logic Apps is especially attractive when fast visual development, operational transparency, and low-code maintenance are more important than fine-grained control.
+
+In this specific project, Logic Apps worked well for validation, branching, messaging, and notification, but the human approval pattern felt less natural and required more workaround thinking. Durable Functions felt closer to the real business requirement, while Logic Apps felt better suited to integration-heavy automation with simpler state transitions.
+
+So my recommendation is:
+- choose **Durable Functions** for production-grade workflow orchestration with timers, external events, and complex branching
+- choose **Logic Apps** when visual orchestration and connector-based automation are the priority
+
+---
+
+## References
+
+- Microsoft Learn. *Azure Durable Functions documentation*.  
+  https://learn.microsoft.com/azure/azure-functions/durable/
+
+- Microsoft Learn. *Azure Logic Apps documentation*.  
+  https://learn.microsoft.com/azure/logic-apps/
+
+- Microsoft Learn. *Azure Service Bus documentation*.  
+  https://learn.microsoft.com/azure/service-bus-messaging/
+
+- Microsoft Learn. *Azure Functions Python developer guide*.  
+  https://learn.microsoft.com/azure/azure-functions/functions-reference-python
+
+- Microsoft Azure Pricing Calculator.  
+  https://azure.microsoft.com/pricing/calculator/
+
+- Course materials, lectures, and labs from CST8917 – Serverless Applications, Winter 2026.
+
+---
+
+## AI Disclosure
+
+AI tools were used in this project as a support tool for:
+
+- troubleshooting configuration and workflow issues
+- clarifying Azure service behavior
+- refining technical writing
+- helping organize and improve the final README content
+
+All implementation decisions, debugging steps, validation, screenshots, and final submitted work were reviewed and completed by me. AI was used as an assistant.
+
+---
+
+## Repository Structure
+
+```text
+CST8917-FinalProject-Muhire-Josue/
 ├── README.md
 ├── version-a-durable-functions/
 │   ├── function_app.py
@@ -150,48 +344,10 @@ CST8917-FinalProject-YourName/
 ├── version-b-logic-apps/
 │   ├── function_app.py
 │   ├── requirements.txt
+│   ├── host.json
 │   ├── local.settings.example.json
 │   ├── test-expense.http
 │   └── screenshots/
 └── presentation/
     ├── slides.pptx
     └── video-link.md
-```
-
-### README.md Contents
-
-1. **Header** — Name, student number, course code, project title, date
-2. **Version A Summary** — Brief description, design decisions, challenges
-3. **Version B Summary** — Brief description, approach chosen for manager approval, challenges
-4. **Comparison Analysis** — Full 800-1200 word comparison (Part 3)
-5. **Recommendation** — 200-300 word recommendation
-6. **References** — All sources with working hyperlinks
-7. **AI Disclosure** — How AI was used, or explicit statement that it was not
-
-> **Security:** Do NOT commit `local.settings.json` or any keys/connection strings. Use `local.settings.example.json` with placeholder values.
-
-### Submission
-
-1. Create a **public** GitHub repository with the structure above
-2. Submit the **repository URL** on Brightspace before the deadline
-
----
-
-## Grading Criteria
-
-| Criterion                                | Weight | Description                                                                                                                                 |
-| ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Version A — Durable Functions**        | 20%    | Correct implementation with orchestrator, activities, human interaction pattern, and durable timer. All test cases pass.                    |
-| **Version B — Logic Apps + Service Bus** | 20%    | Correct implementation with Logic App, Service Bus queue/topic, filtered subscriptions, and email. Screenshots show working workflow.       |
-| **Comparison Analysis**                  | 25%    | All six dimensions addressed with specific, experience-based observations. Genuine comparison, not just describing each version separately. |
-| **Presentation & Slides**                | 25%    | Clear slide deck with logical structure. Video demonstrates both versions working. Verbal explanation shows understanding of trade-offs.    |
-| **Completeness & Quality**               | 10%    | All deliverables present, organized repository, proper citations, clean code, AI disclosure.                                                |
-
----
-
-## Academic Integrity
-
-- This is an **individual** project. You may discuss ideas with classmates, but all code, writing, and presentation must be your own.
-- AI tools are **permitted** with mandatory disclosure.
-- Plagiarism or undisclosed AI use will result in a grade of zero and may be referred to Academic Integrity procedures under Algonquin Policy AA48.
-- All sources must be properly cited.
