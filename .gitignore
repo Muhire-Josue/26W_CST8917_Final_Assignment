@@ -1,0 +1,32 @@
+cat > .gitignore <<'EOF'
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Azure Functions local config
+local.settings.json
+
+# Azurite storage
+__blobstorage__/
+__queuestorage__/
+.azurite/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# macOS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+EOF
